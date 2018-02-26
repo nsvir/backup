@@ -15,7 +15,6 @@ echo "$test$test" > test2.txt
 
 ./backup.sh
 
-[ ! -e ./data/salt ] && echo "failed salt!" && exit -1
 [ ! -e ./.secret ] && echo "failed secret!" && exit -1
 [[ ! $(stat -c "%a" .secret) -eq "400" ]] && echo "failed secret chmod!" && exit -1
 

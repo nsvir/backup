@@ -54,6 +54,7 @@ function compress {
 function extract {
     notify "Extract: $1 -> $2"
     tar xvfz "$1" -C "$2"
+    return $?
 }
 
 function encryption {
@@ -69,6 +70,7 @@ function encryption {
     tmp="/tmp/$tar"
     compress $tmp $list_file
     encrypt $tmp $data$tar.enc
+    cp $salt $data$tar.enc.salt
     rm $tmp
     notify "Done"
 }
@@ -76,7 +78,9 @@ function encryption {
 function decrypt {
     if openssl aes-256-cbc -a -d -in "$1" -out "$2" -pass file:"$password"
     then notify "Decrypted: $1"
-    else notify "Error: $1"
+    else
+	notify "Error: $1"
+	return -1
     fi
 }
 
@@ -85,19 +89,41 @@ function decryption {
     ! [ -e "$salt" ] && notify "Cannot decrypt without the password salt" && exit -1
     ! [ -e "$data" ] && notify "No data have been encrypted" && exit -1
     passwd
-    ! [ -e "$decr" ] && mkdir -p "$decr"
-    for compressed_encrypted in $data*
+    rm -rf "$decr"
+    mkdir -p "$decr"
+    PS3='Which snapshot do you want to restore ? '
+    select filename in $data*.enc
     do
+	compressed_encrypted=$filename
 	compressed=/tmp/compressed.tar.gz
-	decrypt $compressed_encrypted $compressed
-	extract $compressed $decr
+	decrypt $compressed_encrypted $compressed && \
+	    extract $compressed $decr
+	result=$?
 	rm $compressed
+	if [ $result -eq 0 ]
+	then
+	    notify "Decrypted: $filename"
+	    notify "Run $0 -r to restore"
+	else
+	    notify "Decryption error!"
+	fi
+	break;
     done
+}
+
+function restore {
+    ! [ -e "$decr" ] && notify "$decr does not exists" && exit -1
+    echo -ne "Are you sure to restore every files in \"$decr\" ? [y/N] "
+    read answer
+    [[ $answer == "y" ]] && cp -vr $decr/* --no-preserve=mode,ownership /
 }
 
 if [[ $1 == "-d" ]]
 then
     decryption
+elif [[ $1 == "-r" ]]
+then
+    restore
 else
     encryption
 fi
